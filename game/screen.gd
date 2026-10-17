@@ -11,6 +11,7 @@ const Copy = preload("res://game/copy.gd")
 const SliceCopy = preload("res://game/slice_copy.gd")
 const BoardScript = preload("res://game/board.gd")
 const HudWidgets = preload("res://game/hud_widgets.gd")
+const CityView3DScene = preload("res://game/city_view_3d.tscn")
 
 const SAVE_PATH := "user://civitas_party.save"
 
@@ -25,6 +26,7 @@ var road_cell: Array = []
 var tech_pick := ""
 var neighbor_peek := ""
 var map_view_scenario := ""
+var map_3d := false
 var font: Font
 
 var title_label: Label
@@ -47,6 +49,10 @@ var slice_mode_buttons: Dictionary = {}
 var tech_box: VBoxContainer
 var party_box: HFlowContainer
 var board: Control
+var map_viewport_container: SubViewportContainer
+var map_subviewport: SubViewport
+var city_view: Node3D
+var view3d_button: Button
 
 
 func _ready() -> void:
@@ -72,6 +78,7 @@ func _start_party(next_party: String, scenario: String = "rome") -> void:
 	tech_pick = ""
 	neighbor_peek = ""
 	map_view_scenario = ""
+	map_3d = false
 	if party == "slice":
 		game = SliceMatch.new_game(slice_scenario)
 	else:
@@ -110,11 +117,21 @@ func _peek_neighbor_map(scenario_id: String) -> void:
 		map_view_scenario = scenario_id
 		mode = "inspect"
 		neighbor_peek = scenario_id
+		map_3d = true
 	_refresh()
 
 
 func _view_player_map() -> void:
 	map_view_scenario = ""
+	_refresh()
+
+
+func _toggle_map_3d() -> void:
+	if party != "slice":
+		return
+	map_3d = not map_3d
+	if map_3d and map_view_scenario == "" and mode == "overview":
+		enter_inspect()
 	_refresh()
 
 
@@ -361,6 +378,22 @@ func _build_ui() -> void:
 	board.cell_pressed.connect(click_cell)
 	map_side.add_child(board)
 
+	map_viewport_container = SubViewportContainer.new()
+	map_viewport_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	map_viewport_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map_viewport_container.stretch = true
+	map_viewport_container.visible = false
+	map_viewport_container.resized.connect(_sync_map_viewport_size)
+	map_side.add_child(map_viewport_container)
+	map_subviewport = SubViewport.new()
+	map_subviewport.handle_input_locally = true
+	map_subviewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	map_viewport_container.add_child(map_subviewport)
+	city_view = CityView3DScene.instantiate()
+	map_subviewport.add_child(city_view)
+	if city_view.has_signal("cell_clicked"):
+		city_view.cell_clicked.connect(click_cell)
+
 	var right_column := VBoxContainer.new()
 	right_column.custom_minimum_size = Vector2(360, 0)
 	right_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -388,6 +421,8 @@ func _build_ui() -> void:
 	modes.add_child(overview_button)
 	modes.add_child(inspect_button)
 	modes.add_child(build_button)
+	view3d_button = _button("3D", _toggle_map_3d)
+	modes.add_child(view3d_button)
 
 	slice_modes = HFlowContainer.new()
 	slice_modes.add_theme_constant_override("h_separation", 4)
@@ -462,6 +497,9 @@ func _refresh() -> void:
 	inspect_button.disabled = not playing
 	build_button.disabled = not playing or party == "slice"
 	build_button.visible = party == "prototype"
+	view3d_button.visible = party == "slice"
+	if party != "slice":
+		map_3d = false
 	slice_modes.visible = party == "slice" and playing and map_view_scenario == ""
 	party_box.visible = true
 	end_button.visible = playing
@@ -474,6 +512,11 @@ func _refresh() -> void:
 	var board_orders: Array = [] if map_view_scenario != "" else game.draft["orders"]
 	var board_selected: Array = [] if map_view_scenario != "" else selected
 	var board_grid: bool = show_grid and map_view_scenario == ""
+	board.visible = party == "prototype" or (party == "slice" and not map_3d)
+	map_viewport_container.visible = party == "slice" and map_3d
+	if map_viewport_container.visible:
+		_sync_map_viewport_size()
+		city_view.call("apply_snapshot", board_snap, board_grid, board_selected, board_orders)
 	board.set_view(board_snap, board_orders, board_selected, board_grid, font)
 	_fill_orders()
 	_fill_event()
@@ -484,7 +527,12 @@ func _refresh() -> void:
 		_fill_build()
 	tech_box.visible = party == "slice" and mode == "research" and playing
 	inspect_label.visible = playing and (mode == "inspect" or map_view_scenario != "")
-	if map_view_scenario != "" and playing:
+	if map_3d and playing and party == "slice":
+		if map_view_scenario != "":
+			inspect_label.text = "3D · карта соседа. ЛКМ — сдвиг, клик — осмотр. Q/E, G сетка, колёсико к курсору."
+		else:
+			inspect_label.text = "3D-карта. ЛКМ — сдвиг, клик — как на сетке. Q/E, G, колёсико к курсору."
+	elif map_view_scenario != "" and playing:
 		inspect_label.text = "Карта соседа — только просмотр. Кликни клетку."
 	forecast_label.visible = party == "prototype" and mode == "build" and playing
 	if forecast_label.visible:
@@ -505,7 +553,10 @@ func _title(snap: Dictionary) -> String:
 		var cities: Dictionary = snap.get("ai_cities", {})
 		var city: Dictionary = cities.get(map_view_scenario, {})
 		var cname := str(city.get("name", map_view_scenario))
-		return "Civitas · %s · %s · карта: %s" % [era, turn, cname]
+		var view_tag := "3D · " if map_3d else ""
+		return "Civitas · %s · %s · %sкарта: %s" % [era, turn, view_tag, cname]
+	if party == "slice" and map_3d:
+		return "Civitas · %s · %s · 3D · %s" % [era, turn, where]
 	return "Civitas · %s · %s · %s" % [era, turn, where]
 
 
@@ -716,6 +767,15 @@ func _inspect_slice_state(state: Dictionary, x: int, y: int) -> String:
 	if not deposit.is_empty():
 		return "Залежь %s, осталось %d." % [deposit["resource"], int(deposit["left"])]
 	return "Пустая клетка карты среза."
+
+
+func _sync_map_viewport_size() -> void:
+	if map_subviewport == null or map_viewport_container == null:
+		return
+	var sz := map_viewport_container.size
+	if sz.x < 8.0 or sz.y < 8.0:
+		return
+	map_subviewport.size = Vector2i(int(sz.x), int(sz.y))
 
 
 func _click_slice_cell(x: int, y: int) -> void:
@@ -981,6 +1041,12 @@ func _highlight_modes() -> void:
 	overview_button.modulate = active if mode == "overview" else idle
 	inspect_button.modulate = active if mode == "inspect" else idle
 	build_button.modulate = active if mode == "build" and party == "prototype" else idle
+	if view3d_button != null:
+		view3d_button.modulate = active if party == "slice" and map_3d else idle
+		view3d_button.text = "2D" if map_3d else "3D"
+		var vstyle := view3d_button.get_theme_stylebox("normal") as StyleBoxFlat
+		if vstyle != null:
+			vstyle.bg_color = Color("e7d7b8") if map_3d else Color("c8bca4")
 
 
 func _clear(node: Node) -> void:

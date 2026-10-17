@@ -41,10 +41,13 @@ static func _free_cell(snapshot: Dictionary, foundation: String) -> Array:
 	for building in snapshot["buildings"]:
 		for c in building["cells"]:
 			occupied[CivUtil.cell_key(c)] = true
-	for y in range(0, 6):
-		for x in range(0, 6):
-			if not CivSliceMap.is_start_zone_cell(x, y, foundation):
-				continue
+	var zone: Dictionary = CivGeoSlice.start_zone(foundation)
+	var x0 := int(zone["x"])
+	var y0 := int(zone["y"])
+	var w := int(zone["w"])
+	var h := int(zone["h"])
+	for y in range(y0, y0 + h):
+		for x in range(x0, x0 + w):
 			if occupied.has(CivUtil.cell_key([x, y])):
 				continue
 			var terrain := CivGeoSlice.terrain_at(x, y, foundation)

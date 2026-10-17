@@ -11,13 +11,6 @@ const SURVEY_TURNS := 3
 
 const FOUNDATIONS: Array[String] = ["latium_hills", "campanian_coast", "apulian_harbor"]
 
-const START_ZONE := {
-	"latium_hills": {"x": 0, "y": 0, "w": 6, "h": 6},
-	"campanian_coast": {"x": 0, "y": 12, "w": 6, "h": 6},
-	"apulian_harbor": {"x": 12, "y": 12, "w": 5, "h": 6},
-}
-
-
 static func in_bounds(x: int, y: int) -> bool:
 	return x >= 0 and y >= 0 and x < SIZE and y < SIZE
 
@@ -61,8 +54,12 @@ static func all_chunks() -> Array:
 	return chunks
 
 
+static func start_zone(foundation_id: String) -> Dictionary:
+	return _best_start_zone(foundation_id)
+
+
 static func initial_chunks(foundation_id: String) -> Array:
-	var zone: Dictionary = START_ZONE.get(foundation_id, START_ZONE["latium_hills"])
+	var zone: Dictionary = start_zone(foundation_id)
 	var developed_chunk := chunk_of(int(zone["x"]), int(zone["y"]))
 	var records: Array = []
 	for chunk in all_chunks():
@@ -78,8 +75,37 @@ static func initial_chunks(foundation_id: String) -> Array:
 
 
 static func start_zone_origin(foundation_id: String) -> Vector2i:
-	var zone: Dictionary = START_ZONE.get(foundation_id, START_ZONE["latium_hills"])
+	var zone: Dictionary = start_zone(foundation_id)
 	return Vector2i(int(zone["x"]), int(zone["y"]))
+
+
+static func _best_start_zone(foundation_id: String) -> Dictionary:
+	var width := 6
+	var height := 6
+	if foundation_id == "apulian_harbor":
+		width = 5
+	var center := Vector2(float(SIZE) * 0.5, float(SIZE) * 0.5)
+	var best_dist := 999999.0
+	var best := {"x": 6, "y": 6, "w": width, "h": height}
+	for y0 in range(0, SIZE - height + 1):
+		for x0 in range(0, SIZE - width + 1):
+			if not _zone_all_buildable(x0, y0, width, height, foundation_id):
+				continue
+			var zx := float(x0) + float(width) * 0.5
+			var zy := float(y0) + float(height) * 0.5
+			var dist := (zx - center.x) * (zx - center.x) + (zy - center.y) * (zy - center.y)
+			if dist < best_dist:
+				best_dist = dist
+				best = {"x": x0, "y": y0, "w": width, "h": height}
+	return best
+
+
+static func _zone_all_buildable(x0: int, y0: int, width: int, height: int, foundation_id: String) -> bool:
+	for y in range(y0, y0 + height):
+		for x in range(x0, x0 + width):
+			if not allows_default_building(terrain_at(x, y, foundation_id)):
+				return false
+	return true
 
 
 static func foot_of_mountain(x: int, y: int, foundation_id: String) -> bool:

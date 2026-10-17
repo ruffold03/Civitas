@@ -54,7 +54,7 @@ static func clear_cells_under_buildings(map_cells: Dictionary, buildings: Array)
 
 
 static func reveal_start_zone(map_cells: Dictionary, foundation_id: String) -> void:
-	var zone: Dictionary = CivGeoSlice.START_ZONE.get(foundation_id, CivGeoSlice.START_ZONE["latium_hills"])
+	var zone: Dictionary = CivGeoSlice.start_zone(foundation_id)
 	var x0 := int(zone["x"])
 	var y0 := int(zone["y"])
 	var w := int(zone["w"])
@@ -103,7 +103,7 @@ static func scenario_map_seed(scenario_id: String, extra: int = 0) -> int:
 
 
 static func is_start_zone_cell(x: int, y: int, foundation_id: String) -> bool:
-	var zone: Dictionary = CivGeoSlice.START_ZONE.get(foundation_id, CivGeoSlice.START_ZONE["latium_hills"])
+	var zone: Dictionary = CivGeoSlice.start_zone(foundation_id)
 	var x0 := int(zone["x"])
 	var y0 := int(zone["y"])
 	return x >= x0 and x < x0 + int(zone["w"]) and y >= y0 and y < y0 + int(zone["h"])

@@ -26,9 +26,14 @@ func _initialize() -> void:
 	var rome := CivSliceScenario.opening_snapshot("rome")
 	if not rome.has("map_cells") or rome["map_cells"].is_empty():
 		failures.append("рим: map_cells")
-	var hall_key := CivUtil.cell_key([2, 2])
-	if rome["map_cells"].has(hall_key):
-		failures.append("залежь под ратушей")
+	for building in rome["buildings"]:
+		if str(building["type"]) != "town_hall":
+			continue
+		for cell in building["cells"]:
+			var hall_key := CivUtil.cell_key(cell)
+			if rome["map_cells"].has(hall_key):
+				failures.append("залежь под ратушей")
+				break
 	var revealed_start := false
 	for key in rome["map_cells"]:
 		var record: Dictionary = rome["map_cells"][key]
