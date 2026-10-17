@@ -1,0 +1,1 @@
+# Design notes stay out of Godot's import pipeline.

@@ -1,0 +1,13 @@
+# Godot 4+ specific ignores
+.godot/
+.import/
+export_credentials.cfg
+*.translation
+/android/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
