@@ -1,6 +1,6 @@
 extends Control
 
-## Превью техсцены 3D. Запуск сцены F6. F1–F3 — сценарии, G — сетка, Q/E — поворот камеры.
+## Превью техсцены 3D. Запуск сцены F6. F1–F3 — сценарии, T — статусы, G — сетка, Q/E — поворот камеры.
 
 const CivSliceMatch = preload("res://sim/civ_slice_match.gd")
 
@@ -38,6 +38,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				if _game != null:
 					_game.end_turn()
 					_refresh()
+			KEY_T:
+				_cycle_demo_status()
 
 
 func _load(scenario_id: String) -> void:
@@ -52,7 +54,23 @@ func _refresh() -> void:
 	_city.call("apply_snapshot", _game.snapshot, _show_grid, [], [])
 	var snap: Dictionary = _game.snapshot
 	_title.text = "Техсцена 3D · %s · ход %d" % [_scenario, int(snap["turn"])]
-	_hint.text = "F1–F3 города · Space ход · G сетка · Q/E камера · ЛКМ сдвиг · колёсико к курсору · СКМ сдвиг"
+	_hint.text = "F1–F3 города · Space ход · T статусы · G сетка · Q/E камера · ЛКМ сдвиг · колёсико · СКМ сдвиг"
+
+
+func _cycle_demo_status() -> void:
+	if _game == null:
+		return
+	var order: Array[String] = ["working", "idle", "building"]
+	var seen := {}
+	for building in _game.snapshot.get("buildings", []):
+		var type_id := str(building.get("type", ""))
+		if seen.has(type_id):
+			continue
+		seen[type_id] = true
+		var current := str(building.get("status", "working"))
+		var idx := order.find(current)
+		building["status"] = order[(idx + 1) % order.size()]
+	_refresh()
 
 
 func _on_cell_clicked(x: int, y: int) -> void:
