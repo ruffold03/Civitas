@@ -29,6 +29,7 @@ const LOYALTY_MIN := 0
 const LOYALTY_MAX := 100
 const VICTORY_POP := 500
 const TURN_LIMIT := 150
+const MONEY_TAX_POP := 10
 
 const TECHNOLOGIES := {
 	"writing": {"name": "Письмено", "cost": 20, "unlocks": ["forum"]},
@@ -281,12 +282,34 @@ static func _build_buildings() -> Dictionary:
 	"aqueduct": _mk(
 		"Акведук", 3, 5, {"wood": 10, "stone": 15}, {}, {}, 0, {}, 80, 1, {"requires_tech": "engineering"}
 	),
-	"baths": _mk("Термы", 2, 3, {"wood": 6, "stone": 8}, {"wood": 1}, {}, 0, {}, 0, 3),
+	"baths": _mk(
+		"Термы", 2, 3, {"wood": 6, "stone": 8}, {"wood": 1}, {}, 0, {}, 0, 3, {"money_upkeep": 2}
+	),
 	"market": _mk(
-		"Рынок", 2, 2, {"wood": 6, "clay": 4}, {}, {"money": 5}, 0, {}, 0, 0, {"requires_tech": "moneta", "requires_road": true}
+		"Рынок",
+		2,
+		2,
+		{"wood": 6, "clay": 4},
+		{},
+		{"money": 5},
+		0,
+		{},
+		0,
+		0,
+		{"requires_tech": "moneta", "requires_road": true, "money_upkeep": 1},
 	),
 	"port": _mk(
-		"Порт", 3, 4, {"wood": 10, "stone": 8}, {}, {"wine": 2, "money": 8}, 0, {}, 0, 0, {"requires_road": true}
+		"Порт",
+		3,
+		4,
+		{"wood": 10, "stone": 8},
+		{},
+		{"wine": 2, "money": 8},
+		0,
+		{},
+		0,
+		0,
+		{"requires_road": true, "money_upkeep": 2},
 	),
 	"barracks": _mk(
 		"Казарма", 2, 3, {"wood": 10, "stone": 6, "metal": 8}, {}, {}, 0, {}, 0, -1, {"requires_tech": "military"}
@@ -398,6 +421,7 @@ static func _mk(
 		"science": int(extras.get("science", 0)),
 		"requires_tech": str(extras.get("requires_tech", "")),
 		"requires_road": bool(extras.get("requires_road", false)),
+		"money_upkeep": int(extras.get("money_upkeep", 0)),
 		"player_buildable": player_buildable,
 	}
 	return entry

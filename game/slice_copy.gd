@@ -150,6 +150,9 @@ static func building_catalog_blurb(type_id: String) -> String:
 		lines.append("Нужна технология: %s" % CivSliceCatalog.technology(tech)["name"])
 	if bool(definition.get("requires_road", false)):
 		lines.append("Дорога к ратуше вне старта")
+	var upkeep := int(definition.get("money_upkeep", 0))
+	if upkeep > 0:
+		lines.append("Содержание %d денег за ход (после Монеты)" % upkeep)
 	return "\n".join(lines)
 
 
@@ -195,6 +198,17 @@ static func _note(note: Dictionary) -> String:
 			if bool(note.get("ai", false)):
 				return "Другой город страны достиг победы."
 			return "Победа страны."
+		"tax_income":
+			if str(note.get("source", "")) == "tax":
+				return "Налог: +%d денег." % int(note["amount"])
+			return "+%d денег." % int(note["amount"])
+		"money_upkeep":
+			return "Содержание построек: −%d денег." % int(note["amount"])
+		"money_upkeep_short":
+			return "Не хватило денег на содержание (нужно %d, уплачено %d)." % [
+				int(note["need"]),
+				int(note["paid"]),
+			]
 		"consumption", "population", "loyalty":
 			return ""
 		_:

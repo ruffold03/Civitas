@@ -2,6 +2,7 @@ class_name CivSliceRules
 extends RefCounted
 
 const CivSliceCatalog = preload("res://sim/civ_slice_catalog.gd")
+const CivSliceTech = preload("res://sim/civ_slice_tech.gd")
 const CivUtil = preload("res://sim/civ_util.gd")
 
 
@@ -161,6 +162,51 @@ static func science_income(buildings: Array) -> int:
 			continue
 		total += int(CivSliceCatalog.building(building["type"])["science"])
 	return total
+
+
+static func money_economy_active(state: Dictionary) -> bool:
+	return CivSliceTech.is_researched(state, "moneta")
+
+
+static func tax_income(pop: int) -> int:
+	if pop <= 0:
+		return 0
+	return int(pop / CivSliceCatalog.MONEY_TAX_POP)
+
+
+static func money_upkeep_due(buildings: Array) -> int:
+	var total := 0
+	for building in buildings:
+		if str(building.get("status", "")) != "working":
+			continue
+		total += int(CivSliceCatalog.building(building["type"]).get("money_upkeep", 0))
+	return total
+
+
+static func apply_money_settlement(state: Dictionary, pop: int, notes: Array) -> void:
+	if not money_economy_active(state):
+		return
+	var tax := tax_income(pop)
+	if tax > 0:
+		_add_money(state, tax, notes, "tax")
+	var upkeep := money_upkeep_due(state["buildings"])
+	if upkeep <= 0:
+		return
+	var have := int(state["stocks"].get("money", 0))
+	var paid := mini(have, upkeep)
+	state["stocks"]["money"] = have - paid
+	notes.append({"kind": "money_upkeep", "amount": paid, "due": upkeep})
+	if paid < upkeep:
+		notes.append({"kind": "money_upkeep_short", "need": upkeep, "paid": paid})
+
+
+static func _add_money(state: Dictionary, amount: int, notes: Array, source: String) -> void:
+	if amount <= 0:
+		return
+	if not state["stocks"].has("money"):
+		state["stocks"]["money"] = 0
+	state["stocks"]["money"] = int(state["stocks"]["money"]) + amount
+	notes.append({"kind": "tax_income", "amount": amount, "source": source})
 
 
 static func storage_caps(buildings: Array, technologies: Array = []) -> Dictionary:

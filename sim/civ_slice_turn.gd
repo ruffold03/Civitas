@@ -28,6 +28,7 @@ static func resolve(snapshot: Dictionary, draft: Dictionary) -> Dictionary:
 	_construction(state, notes)
 	_construction_roads(state, notes)
 	_production(state, notes)
+	_money_settlement(state, ctx, notes)
 	_consumption(state, ctx, notes)
 	_warehouses(state, notes)
 	_population(state, ctx, notes)
@@ -56,6 +57,7 @@ static func resolve_npc_turn(state: Dictionary, draft: Dictionary, notes: Array)
 	_construction(state, notes)
 	_construction_roads(state, notes)
 	_production(state, notes)
+	_money_settlement(state, ctx, notes)
 	_consumption(state, ctx, notes)
 	_warehouses(state, notes)
 	_population(state, ctx, notes)
@@ -211,6 +213,8 @@ static func _produce(state: Dictionary, building: Dictionary, notes: Array) -> v
 		return
 	var outputs: Dictionary = definition["outputs"]
 	for resource in outputs:
+		if resource == "money" and not CivSliceRules.money_economy_active(state):
+			continue
 		var amount := int(outputs[resource])
 		if not state["stocks"].has(resource):
 			state["stocks"][resource] = 0
@@ -230,6 +234,10 @@ static func _stock_covers(state: Dictionary, cost: Dictionary) -> bool:
 		if have < int(cost[resource]):
 			return false
 	return true
+
+
+static func _money_settlement(state: Dictionary, ctx: Dictionary, notes: Array) -> void:
+	CivSliceRules.apply_money_settlement(state, int(ctx["pop_start"]), notes)
 
 
 static func _consumption(state: Dictionary, ctx: Dictionary, notes: Array) -> void:
