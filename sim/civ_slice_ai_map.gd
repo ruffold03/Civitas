@@ -92,7 +92,7 @@ static func _valid_build_cells(state: Dictionary, type_id: String, cells: Array,
 		var y := int(cell[1])
 		if not CivGeoSlice.in_bounds(x, y):
 			return false
-		var terrain := CivGeoSlice.terrain_at(x, y, foundation)
+		var terrain := CivSliceMap.terrain_at_state(state, x, y, foundation)
 		if not CivGeoSlice.allows_default_building(terrain):
 			return false
 		var chunk: Array = CivGeoSlice.chunk_of(x, y)
@@ -112,7 +112,7 @@ static func _valid_build_cells(state: Dictionary, type_id: String, cells: Array,
 static func _cell_ready_to_prepare(state: Dictionary, x: int, y: int, foundation: String) -> bool:
 	if not CivGeoSlice.in_bounds(x, y):
 		return false
-	var terrain := CivGeoSlice.terrain_at(x, y, foundation)
+	var terrain := CivSliceMap.terrain_at_state(state, x, y, foundation)
 	if not CivGeoSlice.allows_default_building(terrain):
 		return false
 	if CivGeoSlice.preparation_turns(terrain) < 0:
@@ -135,7 +135,7 @@ static func _anchor_cells(state: Dictionary, foundation: String) -> Array:
 	var anchors: Array = []
 	for y in CivGeoSlice.SIZE:
 		for x in CivGeoSlice.SIZE:
-			if not CivGeoSlice.allows_default_building(CivGeoSlice.terrain_at(x, y, foundation)):
+			if not CivGeoSlice.allows_default_building(CivSliceMap.terrain_at_state(state, x, y, foundation)):
 				continue
 			var dist: int = absi(x - hall.x) + absi(y - hall.y)
 			anchors.append({"x": x, "y": y, "dist": dist})

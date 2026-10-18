@@ -160,6 +160,9 @@ func _draw() -> void:
 		if str(order.get("kind", "")) == "prepare":
 			_draw_prepare_draft(order["cells"], gap)
 			continue
+		if str(order.get("kind", "")) == "chop":
+			_draw_chop_draft(order["cells"], gap)
+			continue
 		if str(order.get("kind", "")) == "road":
 			_draw_cells(
 				order["cells"],
@@ -201,6 +204,16 @@ func _draw_cell_prep(x: int, y: int, rect: Rect2) -> void:
 		11,
 		Color("2a2418")
 	)
+
+
+func _draw_chop_draft(cells: Array, gap: int) -> void:
+	if font == null:
+		return
+	for cell in cells:
+		var rect := _rect(int(cell[0]), int(cell[1]), gap)
+		draw_rect(rect, Color("3d5c32", 0.55))
+		draw_rect(rect, Color("b8e0a0", 0.95), false, 2.0)
+		font.draw_string(get_canvas_item(), rect.position + Vector2(2, rect.size.y - 4), "рубка", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("f5f0d8"))
 
 
 func _draw_prepare_draft(cells: Array, gap: int) -> void:
@@ -281,12 +294,16 @@ func _terrain_color(x: int, y: int) -> Color:
 			return Color("a89262")
 		"coast":
 			return Color("d4c48a")
+		"forest":
+			return Color("4a6b3a")
 		_:
 			return Color("c4a574")
 
 
 func _terrain_at(x: int, y: int) -> String:
 	if foundation != "":
+		if not snapshot.is_empty():
+			return SliceMap.terrain_at_state(snapshot, x, y, foundation)
 		return GeoSlice.terrain_at(x, y, foundation)
 	return Geo.terrain_at(x, y)
 

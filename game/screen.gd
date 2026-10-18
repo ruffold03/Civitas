@@ -7,6 +7,7 @@ const SliceCatalog = preload("res://sim/civ_slice_catalog.gd")
 const SliceMap = preload("res://sim/civ_slice_map.gd")
 const SliceTech = preload("res://sim/civ_slice_tech.gd")
 const Geo = preload("res://sim/civ_geo.gd")
+const GeoSlice = preload("res://sim/civ_geo_slice.gd")
 const Copy = preload("res://game/copy.gd")
 const SliceCopy = preload("res://game/slice_copy.gd")
 const BoardScript = preload("res://game/board.gd")
@@ -23,6 +24,7 @@ var selected_type := ""
 var selected_cells: Array = []
 var prepare_cells: Array = []
 var road_cell: Array = []
+var chop_cell: Array = []
 var tech_pick := ""
 var neighbor_peek := ""
 var map_view_scenario := ""
@@ -75,6 +77,7 @@ func _start_party(next_party: String, scenario: String = "rome") -> void:
 	selected_cells = []
 	prepare_cells = []
 	road_cell = []
+	chop_cell = []
 	tech_pick = ""
 	neighbor_peek = ""
 	map_view_scenario = ""
@@ -178,6 +181,7 @@ func enter_slice_mode(next_mode: String) -> void:
 	selected_cells = []
 	prepare_cells = []
 	road_cell = []
+	chop_cell = []
 	tech_pick = ""
 	_refresh()
 
@@ -432,6 +436,7 @@ func _build_ui() -> void:
 		"survey": _mode_button("Изуч.", "survey"),
 		"prepare": _mode_button("Подг.", "prepare"),
 		"road": _mode_button("Дорога", "road"),
+		"chop": _mode_button("Рубка", "chop"),
 		"build": _mode_button("Стройка", "build"),
 		"research": _mode_button("Наука", "research"),
 	}
@@ -707,6 +712,7 @@ func _clear_cells() -> void:
 	selected_cells = []
 	prepare_cells = []
 	road_cell = []
+	chop_cell = []
 	_refresh()
 
 
@@ -726,6 +732,8 @@ func _mode_label() -> String:
 			return "подготовка"
 		"road":
 			return "дорога"
+		"chop":
+			return "рубка леса"
 		"build":
 			return "стройка"
 		"research":
@@ -737,7 +745,7 @@ func _mode_label() -> String:
 func _map_edit_mode() -> bool:
 	if party == "prototype":
 		return mode == "build"
-	return mode in ["survey", "prepare", "road", "build"]
+	return mode in ["survey", "prepare", "road", "chop", "build"]
 
 
 func _board_selection() -> Array:
@@ -747,6 +755,8 @@ func _board_selection() -> Array:
 		return prepare_cells
 	if mode == "road" and not road_cell.is_empty():
 		return [road_cell]
+	if mode == "chop" and not chop_cell.is_empty():
+		return [chop_cell]
 	if mode == "build":
 		return selected_cells
 	return []
@@ -763,6 +773,10 @@ func _inspect_slice_state(state: Dictionary, x: int, y: int) -> String:
 				return "Дорога\n%s" % SliceCopy._status(
 					{"status": road.get("status", "working"), "timer": road.get("timer", 0)}
 				)
+	var foundation := str(state.get("foundation", ""))
+	var terrain := SliceMap.terrain_at_state(state, x, y, foundation)
+	if terrain == "forest":
+		return "Лес. Рубка: +%d дерева, клетка станет равниной." % GeoSlice.FOREST_CHOP_WOOD
 	var deposit: Dictionary = SliceMap.visible_deposit(state.get("map_cells", {}), x, y)
 	if not deposit.is_empty():
 		return "Залежь %s, осталось %d." % [deposit["resource"], int(deposit["left"])]
@@ -795,6 +809,12 @@ func _click_slice_cell(x: int, y: int) -> void:
 			_toggle_prepare_cell(x, y)
 		"road":
 			road_cell = [x, y]
+		"chop":
+			chop_cell = [x, y]
+			var chop_result: Dictionary = game.chop_order([[x, y]])
+			message_label.text = "" if chop_result["ok"] else str(chop_result["error"])
+			if chop_result["ok"]:
+				chop_cell = []
 		"build":
 			if selected_type == "":
 				message_label.text = "Сначала выбери здание."

@@ -102,6 +102,8 @@ static func order_line(order: Dictionary) -> String:
 			return "Подготовить %d клеток" % order["cells"].size()
 		"road":
 			return "Дорога, %s" % cost(order["reserve"])
+		"chop":
+			return "Рубка леса (+8 дерева)"
 		_:
 			var definition: Dictionary = CivSliceCatalog.building(order["type"])
 			return "%s, %s" % [definition["name"], cost(order["reserve"])]
@@ -204,6 +206,8 @@ static func _note(note: Dictionary) -> String:
 			return "+%d денег." % int(note["amount"])
 		"money_upkeep":
 			return "Содержание построек: −%d денег." % int(note["amount"])
+		"forest_chop":
+			return "Рубка (%d,%d): +%d дерева." % [int(note["x"]), int(note["y"]), int(note["wood"])]
 		"money_upkeep_short":
 			return "Не хватило денег на содержание (нужно %d, уплачено %d)." % [
 				int(note["need"]),

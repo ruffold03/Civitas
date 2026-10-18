@@ -103,6 +103,7 @@ static func opening_snapshot(scenario_id: String) -> Dictionary:
 		"roads": [],
 		"map_seed": map_seed,
 		"map_cells": map_cells,
+		"cell_terrain": {},
 		"cell_prep": {},
 		"chunks": CivGeoSlice.initial_chunks(foundation),
 		"effects": [],

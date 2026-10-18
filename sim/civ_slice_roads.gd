@@ -24,7 +24,7 @@ static func needs_outside_road_check(cells: Array, foundation_id: String) -> boo
 static func can_place_road(state: Dictionary, x: int, y: int, foundation_id: String) -> Dictionary:
 	if not CivGeoSlice.in_bounds(x, y):
 		return {"ok": false, "error": "Клетка вне карты."}
-	var terrain := CivGeoSlice.terrain_at(x, y, foundation_id)
+	var terrain := CivSliceMap.terrain_at_state(state, x, y, foundation_id)
 	if not CivGeoSlice.allows_default_building(terrain):
 		return {"ok": false, "error": "Здесь нельзя строить дорогу."}
 	var chunk: Array = CivGeoSlice.chunk_of(x, y)

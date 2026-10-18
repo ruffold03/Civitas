@@ -102,6 +102,20 @@ static func scenario_map_seed(scenario_id: String, extra: int = 0) -> int:
 	return int(hash("%s:%d" % [scenario_id, extra])) & 0x7fffffff
 
 
+static func terrain_at_state(state: Dictionary, x: int, y: int, foundation_id: String) -> String:
+	var overrides: Dictionary = state.get("cell_terrain", {})
+	var key := CivUtil.cell_key([x, y])
+	if overrides.has(key):
+		return str(overrides[key])
+	return CivGeoSlice.terrain_at(x, y, foundation_id)
+
+
+static func set_cell_terrain(state: Dictionary, x: int, y: int, terrain: String) -> void:
+	if not state.has("cell_terrain"):
+		state["cell_terrain"] = {}
+	state["cell_terrain"][CivUtil.cell_key([x, y])] = terrain
+
+
 static func is_start_zone_cell(x: int, y: int, foundation_id: String) -> bool:
 	var zone: Dictionary = CivGeoSlice.start_zone(foundation_id)
 	var x0 := int(zone["x"])

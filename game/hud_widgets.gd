@@ -23,6 +23,7 @@ const ORDER_COLORS := {
 	"survey": Color("6a9ec8"),
 	"prepare": Color("c9a04a"),
 	"road": Color("6a5a48"),
+	"chop": Color("4a7a3a"),
 	"build": Color("8d5a3c"),
 }
 
@@ -268,6 +269,8 @@ static func _slice_order_title(order: Dictionary) -> String:
 			return "Подготовка (%d)" % order["cells"].size()
 		"road":
 			return "Дорога"
+		"chop":
+			return "Рубка леса"
 		_:
 			return CivSliceCatalog.building(order["type"])["name"]
 
@@ -458,6 +461,8 @@ class SliceCopyLines:
 				return "%d клеток" % order["cells"].size()
 			"road":
 				return "2 дерева · 1 ход"
+			"chop":
+				return "+8 дерева · 1 ход"
 			_:
 				return _cost(order["reserve"])
 

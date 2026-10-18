@@ -76,11 +76,25 @@ static func _apply_orders(state: Dictionary, draft: Dictionary, notes: Array) ->
 				var chunk: Dictionary = _chunk_record(state, cx, cy)
 				chunk["survey_timer"] = CivGeoSlice.SURVEY_TURNS
 				notes.append({"kind": "survey_ordered", "chunk_x": cx, "chunk_y": cy, "timer": chunk["survey_timer"]})
+			"chop":
+				for cell in order["cells"]:
+					var x := int(cell[0])
+					var y := int(cell[1])
+					if CivSliceMap.terrain_at_state(state, x, y, foundation) != "forest":
+						continue
+					state["stocks"]["wood"] = int(state["stocks"].get("wood", 0)) + CivGeoSlice.FOREST_CHOP_WOOD
+					CivSliceMap.set_cell_terrain(state, x, y, "plain")
+					notes.append({
+						"kind": "forest_chop",
+						"x": x,
+						"y": y,
+						"wood": CivGeoSlice.FOREST_CHOP_WOOD,
+					})
 			"prepare":
 				for cell in order["cells"]:
 					var x := int(cell[0])
 					var y := int(cell[1])
-					var terrain := CivGeoSlice.terrain_at(x, y, foundation)
+					var terrain := CivSliceMap.terrain_at_state(state, x, y, foundation)
 					var turns := CivGeoSlice.preparation_turns(terrain)
 					CivSliceMap.set_prep_timer(state, x, y, turns)
 					notes.append({"kind": "prepare_ordered", "x": x, "y": y, "timer": turns})

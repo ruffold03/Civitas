@@ -91,6 +91,20 @@ func prepare_order(cells: Array) -> Dictionary:
 	return {"ok": true, "error": "", "order_id": order["id"]}
 
 
+func chop_order(cells: Array) -> Dictionary:
+	var check := _check_chop(cells)
+	if not check["ok"]:
+		return check
+	var order := {
+		"id": int(draft["next_order_id"]),
+		"kind": "chop",
+		"cells": _normalize_cells(cells),
+	}
+	draft["next_order_id"] = int(draft["next_order_id"]) + 1
+	draft["orders"].append(order)
+	return {"ok": true, "error": "", "order_id": order["id"]}
+
+
 func survey_order(chunk_x: int, chunk_y: int) -> Dictionary:
 	var check := _check_survey(chunk_x, chunk_y)
 	if not check["ok"]:
@@ -209,7 +223,7 @@ func _check_prepare(cells: Array) -> Dictionary:
 			return {"ok": false, "error": "Клетка вне карты."}
 		if CivSliceMap.is_start_zone_cell(x, y, foundation):
 			return {"ok": false, "error": "Стартовая зона уже готова к стройке."}
-		var terrain := CivGeoSlice.terrain_at(x, y, foundation)
+		var terrain := CivSliceMap.terrain_at_state(snapshot, x, y, foundation)
 		if not CivGeoSlice.allows_default_building(terrain):
 			return {"ok": false, "error": "Здесь нельзя готовить местность."}
 		var chunk: Array = CivGeoSlice.chunk_of(x, y)
@@ -227,6 +241,35 @@ func _check_prepare(cells: Array) -> Dictionary:
 			return {"ok": false, "error": "Клетка уже готовится."}
 		if CivGeoSlice.preparation_turns(terrain) < 0:
 			return {"ok": false, "error": "Для этой местности подготовка не нужна."}
+	return {"ok": true, "error": ""}
+
+
+func _check_chop(cells: Array) -> Dictionary:
+	if snapshot["mode"] != "play":
+		return {"ok": false, "error": "Партия уже закончена."}
+	var normalized := _normalize_cells(cells)
+	if normalized.size() != 1:
+		return {"ok": false, "error": "Рубка — одна клетка леса."}
+	var cell: Array = normalized[0]
+	var x := int(cell[0])
+	var y := int(cell[1])
+	if not CivGeoSlice.in_bounds(x, y):
+		return {"ok": false, "error": "Клетка вне карты."}
+	var foundation := str(snapshot["foundation"])
+	var terrain := CivSliceMap.terrain_at_state(snapshot, x, y, foundation)
+	if terrain != "forest":
+		return {"ok": false, "error": "Здесь нет леса для рубки."}
+	var chunk: Array = CivGeoSlice.chunk_of(x, y)
+	if (
+		not CivSliceMap.is_start_zone_cell(x, y, foundation)
+		and not CivSliceMap.chunk_is_surveyed(snapshot, int(chunk[0]), int(chunk[1]))
+	):
+		return {"ok": false, "error": "Сначала изучи чанк."}
+	if CivSliceMap.is_cell_occupied(snapshot, x, y):
+		return {"ok": false, "error": "Клетка занята."}
+	var key := CivUtil.cell_key(cell)
+	if _cells_in_draft_chop().has(key):
+		return {"ok": false, "error": "Рубка этой клетки уже в очереди."}
 	return {"ok": true, "error": ""}
 
 
@@ -252,7 +295,7 @@ func _check_build(type_id: String, cells: Array) -> Dictionary:
 		var y := int(cell[1])
 		if not CivGeoSlice.in_bounds(x, y):
 			return {"ok": false, "error": "Клетка вне карты."}
-		var terrain := CivGeoSlice.terrain_at(x, y, foundation)
+		var terrain := CivSliceMap.terrain_at_state(snapshot, x, y, foundation)
 		if not CivGeoSlice.allows_default_building(terrain):
 			return {"ok": false, "error": "Здесь нельзя строить."}
 		var chunk: Array = CivGeoSlice.chunk_of(x, y)
@@ -336,6 +379,16 @@ func _cells_in_draft_prepare() -> Dictionary:
 	var reserved := {}
 	for order in draft["orders"]:
 		if str(order.get("kind", "")) != "prepare":
+			continue
+		for cell in order["cells"]:
+			reserved[CivUtil.cell_key(cell)] = true
+	return reserved
+
+
+func _cells_in_draft_chop() -> Dictionary:
+	var reserved := {}
+	for order in draft["orders"]:
+		if str(order.get("kind", "")) != "chop":
 			continue
 		for cell in order["cells"]:
 			reserved[CivUtil.cell_key(cell)] = true
