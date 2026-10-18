@@ -6,6 +6,7 @@ class_name CityView3D
 signal cell_clicked(x: int, y: int)
 
 const GeoSlice = preload("res://sim/civ_geo_slice.gd")
+const SliceMap = preload("res://sim/civ_slice_map.gd")
 
 const CELL := 1.0
 const MAP_SIZE := GeoSlice.SIZE
@@ -13,6 +14,18 @@ const RIVER_WATER := -0.20
 const SEA_WATER := -0.24
 const TERRAIN_BOTTOM := -0.82
 const WATER_SHADER_PATH := "res://art/italy/classical/water.gdshader"
+const GROUND_DIR := "res://art/italy/classical/ground"
+const GROUND_TEXTURE := {
+	"plain": "plain.png",
+	"hill": "hill.png",
+	"forest": "forest_floor.png",
+	"coast": "coast.png",
+	"mountain": "rock.png",
+	"river": "coast.png",
+	"sea": "coast.png",
+}
+const TREE_GLB := "res://art/italy/classical/trees/forest.glb"
+const TREES_PER_CELL := 1
 const BUILDING_GLB_DIR := "res://art/italy/classical/buildings"
 
 ## Четвёртое здание: положить <type>.glb в BUILDING_GLB_DIR и добавить id в BUILDING_GLB.
@@ -20,6 +33,8 @@ const BUILDING_GLB := {
 	"domus": "domus.glb",
 	"town_hall": "town_hall.glb",
 	"farm": "farm.glb",
+	"well": "well.glb",
+	"sawmill": "sawmill.glb",
 }
 
 const BUILDING_HEIGHT := {
@@ -45,6 +60,7 @@ const ORDER_COLORS := {
 	"prepare": Color("c9a04a"),
 	"road": Color("6a5a48"),
 	"build": Color("8d5a3c"),
+	"chop": Color("4a7a3a"),
 }
 
 @export var view_cells: int = 18
@@ -72,6 +88,7 @@ const YAW_ANIM_SEC := 0.38
 
 var _material_cache: Dictionary = {}
 var _gltf_cache: Dictionary = {}
+var _tree_meshes: Array = []
 
 
 func _ready() -> void:
@@ -118,11 +135,13 @@ func _rebuild_world() -> void:
 	var terrain: Node3D = $World/Terrain
 	var roads: Node3D = $World/Roads
 	var buildings: Node3D = $World/Buildings
+	var trees := _trees_root()
 	var grid: Node3D = $World/Grid
 	var selection: Node3D = $World/Selection
 	_clear_children(terrain)
 	_clear_children(roads)
 	_clear_children(buildings)
+	_clear_children(trees)
 	_clear_children(grid)
 	_clear_children(selection)
 	if snapshot.is_empty():
@@ -132,10 +151,103 @@ func _rebuild_world() -> void:
 	for y in limit:
 		for x in limit:
 			terrain.add_child(_make_terrain_tile(x, y, foundation))
+	_build_forest(trees, foundation)
 	_build_roads(foundation, roads)
 	_build_buildings(buildings)
 	_rebuild_grid_only()
 	_rebuild_selection(selection)
+
+
+func _trees_root() -> Node3D:
+	var world: Node3D = $World
+	var trees := world.get_node_or_null("Trees") as Node3D
+	if trees == null:
+		trees = Node3D.new()
+		trees.name = "Trees"
+		world.add_child(trees)
+	return trees
+
+
+func _build_forest(trees: Node3D, foundation: String) -> void:
+	var meshes := _tree_meshes_ready()
+	if meshes.is_empty():
+		return
+	var xforms: Array[Transform3D] = []
+	var limit := mini(view_cells, MAP_SIZE)
+	for y in limit:
+		for x in limit:
+			if _terrain_at(x, y, foundation) != "forest":
+				continue
+			var rng := RandomNumberGenerator.new()
+			rng.seed = int(x) * 374761393 + int(y) * 668265263
+			for _i in TREES_PER_CELL:
+				var ox := rng.randf_range(0.46, 0.54)
+				var oz := rng.randf_range(0.46, 0.54)
+				var scale := rng.randf_range(0.92, 1.06)
+				var yaw := rng.randf_range(0.0, TAU)
+				var height := _surface_height_at(float(x) + ox, float(y) + oz, foundation)
+				var basis := Basis(Vector3.UP, yaw).scaled(Vector3(scale, scale, scale))
+				xforms.append(Transform3D(basis, Vector3(float(x) + ox, height, float(y) + oz)))
+	if xforms.is_empty():
+		return
+	for mesh in meshes:
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = mesh
+		multi.instance_count = xforms.size()
+		for i in xforms.size():
+			multi.set_instance_transform(i, xforms[i])
+		var inst := MultiMeshInstance3D.new()
+		inst.name = "Forest"
+		inst.multimesh = multi
+		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		trees.add_child(inst)
+
+
+func _tree_meshes_ready() -> Array:
+	if not _tree_meshes.is_empty():
+		return _tree_meshes
+	if not FileAccess.file_exists(TREE_GLB):
+		return []
+	var scene: Node = null
+	if ResourceLoader.exists(TREE_GLB):
+		var packed = load(TREE_GLB)
+		if packed is PackedScene:
+			scene = (packed as PackedScene).instantiate()
+	if scene == null:
+		var doc := GLTFDocument.new()
+		var state := GLTFState.new()
+		if doc.append_from_file(TREE_GLB, state) != OK:
+			return []
+		scene = doc.generate_scene(state)
+	if scene == null:
+		return []
+	_collect_tree_meshes(scene)
+	scene.free()
+	return _tree_meshes
+
+
+func _collect_tree_meshes(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mesh := (node as MeshInstance3D).mesh
+		if mesh != null:
+			_tree_meshes.append(mesh)
+	for child in node.get_children():
+		_collect_tree_meshes(child)
+
+
+func _surface_height_at(wx: float, wz: float, foundation: String) -> float:
+	var x0 := clampi(int(floor(wx)), 0, MAP_SIZE)
+	var z0 := clampi(int(floor(wz)), 0, MAP_SIZE)
+	var x1 := mini(x0 + 1, MAP_SIZE)
+	var z1 := mini(z0 + 1, MAP_SIZE)
+	var tx := clampf(wx - float(x0), 0.0, 1.0)
+	var tz := clampf(wz - float(z0), 0.0, 1.0)
+	var h00 := _grid_height(x0, z0, foundation)
+	var h10 := _grid_height(x1, z0, foundation)
+	var h01 := _grid_height(x0, z1, foundation)
+	var h11 := _grid_height(x1, z1, foundation)
+	return lerpf(lerpf(h00, h10, tx), lerpf(h01, h11, tx), tz)
 
 
 func _rebuild_grid_only() -> void:
@@ -179,7 +291,7 @@ func _rebuild_selection(selection: Node3D) -> void:
 
 
 func _make_terrain_tile(x: int, y: int, foundation: String) -> Node3D:
-	var terrain := GeoSlice.terrain_at(x, y, foundation)
+	var terrain := _terrain_at(x, y, foundation)
 	var body := StaticBody3D.new()
 	body.position = Vector3.ZERO
 	body.collision_layer = 1
@@ -201,7 +313,7 @@ func _make_terrain_tile(x: int, y: int, foundation: String) -> Node3D:
 		h01 = _grid_height(x, y + 1, foundation)
 	var mesh_inst := MeshInstance3D.new()
 	mesh_inst.mesh = _make_cell_mesh(x, y, h00, h10, h11, h01, terrain)
-	mesh_inst.material_override = _land_material()
+	mesh_inst.material_override = _land_material(terrain)
 	body.add_child(mesh_inst)
 	var hmax := maxf(maxf(h00, h10), maxf(h11, h01))
 	var shape := CollisionShape3D.new()
@@ -217,7 +329,7 @@ func _make_terrain_tile(x: int, y: int, foundation: String) -> Node3D:
 	body.add_child(shape)
 	if _is_water(terrain):
 		body.add_child(_make_water_cap(x, y, terrain))
-	if terrain == "coast":
+	if terrain == "coast" and _touches_water(x, y, foundation):
 		body.add_child(_make_shore_foam(x, y, foundation, h00, h10, h11, h01))
 	return body
 
@@ -235,11 +347,8 @@ func _make_cell_mesh(
 	var x1 := x0 + CELL
 	var z0 := y * CELL
 	var z1 := z0 + CELL
-	var cell_color := _terrain_color(terrain)
-	var c00 := cell_color
-	var c10 := cell_color
-	var c11 := cell_color
-	var c01 := cell_color
+	var top := Color.WHITE if _ground_texture(terrain) != null else _terrain_color(terrain)
+	var side := Color(0.62, 0.54, 0.42)
 	var v00 := Vector3(x0, h00, z0)
 	var v10 := Vector3(x1, h10, z0)
 	var v11 := Vector3(x1, h11, z1)
@@ -250,12 +359,11 @@ func _make_cell_mesh(
 	var b01 := Vector3(x0, TERRAIN_BOTTOM, z1)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_st_quad(st, v00, v10, v11, v01, c00, c10, c11, c01, Vector3.UP)
-	var side := Color(0.55, 0.46, 0.32)
-	_st_quad(st, b00, v00, v10, b10, side, c00, c10, side, Vector3(0, 0, -1))
-	_st_quad(st, b10, v10, v11, b11, side, c10, c11, side, Vector3.RIGHT)
-	_st_quad(st, b11, v11, v01, b01, side, c11, c01, side, Vector3.BACK)
-	_st_quad(st, b01, v01, v00, b00, side, c01, c00, side, Vector3.LEFT)
+	_st_quad(st, v00, v10, v11, v01, top, top, top, top, Vector3.UP, Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1))
+	_st_quad(st, b00, v00, v10, b10, side, top, top, side, Vector3(0, 0, -1), Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1))
+	_st_quad(st, b10, v10, v11, b11, side, top, top, side, Vector3.RIGHT, Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1))
+	_st_quad(st, b11, v11, v01, b01, side, top, top, side, Vector3.BACK, Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1))
+	_st_quad(st, b01, v01, v00, b00, side, top, top, side, Vector3.LEFT, Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1))
 	return st.commit()
 
 
@@ -270,9 +378,13 @@ func _st_quad(
 	cc: Color,
 	cd: Color,
 	n: Vector3,
+	ua: Vector2,
+	ub: Vector2,
+	uc: Vector2,
+	ud: Vector2,
 ) -> void:
-	_st_tri(st, a, b, c, ca, cb, cc, n)
-	_st_tri(st, a, c, d, ca, cc, cd, n)
+	_st_tri(st, a, b, c, ca, cb, cc, n, ua, ub, uc)
+	_st_tri(st, a, c, d, ca, cc, cd, n, ua, uc, ud)
 
 
 func _st_tri(
@@ -284,23 +396,29 @@ func _st_tri(
 	cb: Color,
 	cc: Color,
 	n: Vector3,
+	ua: Vector2,
+	ub: Vector2,
+	uc: Vector2,
 ) -> void:
 	st.set_normal(n)
 	st.set_color(ca)
+	st.set_uv(ua)
 	st.add_vertex(a)
 	st.set_normal(n)
 	st.set_color(cb)
+	st.set_uv(ub)
 	st.add_vertex(b)
 	st.set_normal(n)
 	st.set_color(cc)
+	st.set_uv(uc)
 	st.add_vertex(c)
 
 
 func _make_water_cap(x: int, y: int, terrain: String) -> MeshInstance3D:
 	var water := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(CELL * 1.12, 0.05, CELL * 1.12)
-	water.mesh = box
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(CELL, CELL)
+	water.mesh = plane
 	water.material_override = _water_material(terrain)
 	var level := RIVER_WATER if terrain == "river" else SEA_WATER
 	water.position = Vector3(x * CELL + CELL * 0.5, level, y * CELL + CELL * 0.5)
@@ -318,10 +436,10 @@ func _make_shore_foam(
 ) -> MeshInstance3D:
 	var foam := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(CELL * 0.92, 0.03, CELL * 0.92)
+	box.size = Vector3(CELL * 0.96, 0.012, CELL * 0.96)
 	foam.mesh = box
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.93, 0.88, 0.72, 0.55)
+	mat.albedo_color = Color(0.95, 0.93, 0.84, 0.42)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.85
 	foam.material_override = mat
@@ -405,7 +523,7 @@ func _grid_height(gx: int, gy: int, foundation: String) -> float:
 			var cy: int = gy + dy
 			if not GeoSlice.in_bounds(cx, cy):
 				continue
-			var kind := GeoSlice.terrain_at(cx, cy, foundation)
+			var kind := _terrain_at(cx, cy, foundation)
 			var h := _terrain_surface_height(kind, cx, cy, foundation)
 			if _is_water(kind):
 				water.append(h)
@@ -432,18 +550,41 @@ func _terrain_color(terrain: String) -> Color:
 			return Color("3e5a48")
 		"sea":
 			return Color("2f4e5c")
+		"forest":
+			return Color("3d5c32")
 		_:
 			return Color("c3a45c")
 
 
-func _land_material() -> StandardMaterial3D:
-	if _material_cache.has("land"):
-		return _material_cache["land"]
+func _terrain_at(x: int, y: int, foundation: String) -> String:
+	if snapshot.is_empty():
+		return GeoSlice.terrain_at(x, y, foundation)
+	return SliceMap.terrain_at_state(snapshot, x, y, foundation)
+
+
+func _ground_texture(terrain: String) -> Texture2D:
+	var key := "ground_tex_%s" % terrain
+	if _material_cache.has(key):
+		return _material_cache[key]
+	var file_name: String = GROUND_TEXTURE.get(terrain, "plain.png")
+	var tex := load("%s/%s" % [GROUND_DIR, file_name]) as Texture2D
+	_material_cache[key] = tex
+	return tex
+
+
+func _land_material(terrain: String) -> StandardMaterial3D:
+	var key := "land_%s" % terrain
+	if _material_cache.has(key):
+		return _material_cache[key]
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.roughness = 0.92
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_material_cache["land"] = mat
+	var tex := _ground_texture(terrain)
+	if tex != null:
+		mat.albedo_texture = tex
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_material_cache[key] = mat
 	return mat
 
 
@@ -458,13 +599,15 @@ func _water_material(terrain: String) -> ShaderMaterial:
 		shader.code = _embedded_water_shader()
 	mat.shader = shader
 	if terrain == "river":
-		mat.set_shader_parameter("shallow_color", Color(0.46, 0.72, 0.68, 0.86))
-		mat.set_shader_parameter("deep_color", Color(0.18, 0.42, 0.44, 0.92))
-		mat.set_shader_parameter("foam", 0.42)
+		mat.set_shader_parameter("shallow_color", Color(0.58, 0.78, 0.55, 1.0))
+		mat.set_shader_parameter("deep_color", Color(0.12, 0.38, 0.34, 1.0))
+		mat.set_shader_parameter("foam_color", Color(0.93, 0.90, 0.74, 1.0))
+		mat.set_shader_parameter("foam", 0.48)
 	else:
-		mat.set_shader_parameter("shallow_color", Color(0.34, 0.62, 0.78, 0.88))
-		mat.set_shader_parameter("deep_color", Color(0.12, 0.32, 0.50, 0.94))
-		mat.set_shader_parameter("foam", 0.28)
+		mat.set_shader_parameter("shallow_color", Color(0.42, 0.78, 0.76, 1.0))
+		mat.set_shader_parameter("deep_color", Color(0.07, 0.30, 0.46, 1.0))
+		mat.set_shader_parameter("foam_color", Color(0.94, 0.92, 0.82, 1.0))
+		mat.set_shader_parameter("foam", 0.32)
 	_material_cache[key] = mat
 	return mat
 
@@ -500,7 +643,7 @@ func _touches_water(x: int, y: int, foundation: String) -> bool:
 	for offset in [[1, 0], [-1, 0], [0, 1], [0, -1]]:
 		var nx: int = x + int(offset[0])
 		var ny: int = y + int(offset[1])
-		if GeoSlice.in_bounds(nx, ny) and _is_water(GeoSlice.terrain_at(nx, ny, foundation)):
+		if GeoSlice.in_bounds(nx, ny) and _is_water(_terrain_at(nx, ny, foundation)):
 			return true
 	return false
 

@@ -10,6 +10,7 @@ const CHUNK := 6
 const SURVEY_TURNS := 3
 
 const FOUNDATIONS: Array[String] = ["latium_hills", "campanian_coast", "apulian_harbor"]
+const FOREST_CHOP_WOOD := 8
 
 static func in_bounds(x: int, y: int) -> bool:
 	return x >= 0 and y >= 0 and x < SIZE and y < SIZE
@@ -29,6 +30,10 @@ static func terrain_at(x: int, y: int, foundation_id: String) -> String:
 
 static func allows_default_building(terrain: String) -> bool:
 	return terrain == "plain" or terrain == "hill" or terrain == "coast"
+
+
+static func is_forest(terrain: String) -> bool:
+	return terrain == "forest"
 
 
 static func preparation_turns(terrain: String) -> int:
@@ -146,14 +151,13 @@ static func _terrain_latium(x: int, y: int) -> String:
 		return "mountain"
 	if _is_tiber(x, y):
 		return "river"
-	if y >= 16 and x >= 9:
-		return "sea"
-	if y == 15 and x >= 9:
-		return "coast"
-	if y == 16 and x >= 9 and x <= 16:
-		return "coast"
+	var lake := _latium_lake(x, y)
+	if lake != "":
+		return lake
 	if y == 2 and x <= 11:
 		return "hill"
+	if _forest_belt(x, y, 10, 8, 5.2, 16.0):
+		return "forest"
 	if y >= 3 and y <= 7 and x <= 5 and (x + y) % 2 == 0:
 		return "hill"
 	return "plain"
@@ -168,6 +172,8 @@ static func _terrain_campania(x: int, y: int) -> String:
 		return "coast"
 	if x >= 14 and y <= 4:
 		return "hill"
+	if _forest_belt(x, y, 8, 7, 5.2, 16.0):
+		return "forest"
 	return "plain"
 
 
@@ -180,7 +186,38 @@ static func _terrain_apulia(x: int, y: int) -> String:
 		return "mountain"
 	if y <= 4 and x >= 8 and (x + y) % 2 == 1:
 		return "hill"
+	if _forest_belt(x, y, 6, 7, 5.0, 14.0):
+		return "forest"
 	return "plain"
+
+
+static func _latium_lake(x: int, y: int) -> String:
+	# Юго-восточное озеро: вытянутый контур с бухтой, не прямоугольник у края карты.
+	var cx := 13.0
+	var cy := 12.8
+	var dx := float(x) + 0.5 - cx
+	var dy := float(y) + 0.5 - cy
+	var ang := 0.4
+	var rx := dx * cos(ang) - dy * sin(ang)
+	var ry := dx * sin(ang) + dy * cos(ang)
+	var wobble := 0.55 * sin(float(x) * 1.15 + float(y) * 0.55) + 0.35 * cos(float(y) * 1.35 - float(x) * 0.25)
+	var radius_y := 2.35 + wobble * 0.25
+	var dist := (rx / 3.15) * (rx / 3.15) + (ry / radius_y) * (ry / radius_y)
+	var cove_x := float(x) - 11.2
+	var cove_y := float(y) - 13.2
+	dist += maxf(0.0, 1.15 - (cove_x * cove_x + cove_y * cove_y) * 0.55)
+	if dist <= 1.0:
+		return "sea"
+	if dist <= 1.48:
+		return "coast"
+	return ""
+
+
+static func _forest_belt(x: int, y: int, cx: int, cy: int, inner: float, outer: float) -> bool:
+	var dx := float(x) + 0.5 - float(cx)
+	var dy := float(y) + 0.5 - float(cy)
+	var dist := sqrt(dx * dx + dy * dy)
+	return dist >= inner and dist <= outer
 
 
 static func _is_tiber(x: int, y: int) -> bool:

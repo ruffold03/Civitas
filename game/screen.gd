@@ -78,7 +78,7 @@ func _start_party(next_party: String, scenario: String = "rome") -> void:
 	tech_pick = ""
 	neighbor_peek = ""
 	map_view_scenario = ""
-	map_3d = false
+	map_3d = next_party == "slice"
 	if party == "slice":
 		game = SliceMatch.new_game(slice_scenario)
 	else:
