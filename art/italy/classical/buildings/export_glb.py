@@ -102,6 +102,33 @@ class Mesh:
         self.add_tri(a0, b0, r0, color)
         self.add_tri(b1, a1, r1, color)
 
+    def add_cylinder(self, cx, base_y, cz, radius, height, color, segments=7) -> None:
+        pts_lo = []
+        pts_hi = []
+        for i in range(segments):
+            a = math.tau * i / segments
+            dx = math.cos(a) * radius
+            dz = math.sin(a) * radius
+            pts_lo.append((cx + dx, base_y, cz + dz))
+            pts_hi.append((cx + dx, base_y + height, cz + dz))
+        top = (cx, base_y + height, cz)
+        bot = (cx, base_y, cz)
+        for i in range(segments):
+            j = (i + 1) % segments
+            self.add_quad(pts_lo[i], pts_lo[j], pts_hi[j], pts_hi[i], color)
+            self.add_tri(pts_hi[i], pts_hi[j], top, color)
+            self.add_tri(pts_lo[j], pts_lo[i], bot, color)
+
+    def add_cone(self, cx, base_y, cz, radius, height, color, segments=8) -> None:
+        tip = (cx, base_y + height, cz)
+        ring = []
+        for i in range(segments):
+            a = math.tau * i / segments
+            ring.append((cx + math.cos(a) * radius, base_y, cz + math.sin(a) * radius))
+        for i in range(segments):
+            j = (i + 1) % segments
+            self.add_tri(ring[i], ring[j], tip, color)
+
     def add_pediment(self, x0, x1, z_front, z_back, y0, y1, color) -> None:
         xm = (x0 + x1) * 0.5
         f0, f1, fr = (x0, y0, z_front), (x1, y0, z_front), (xm, y1, z_front)
@@ -269,6 +296,22 @@ def build_farm() -> Mesh:
     return m
 
 
+BARK = (0.36, 0.24, 0.14)
+CANOPY = (0.24, 0.46, 0.20)
+CANOPY_DARK = (0.16, 0.34, 0.14)
+CANOPY_LIGHT = (0.38, 0.56, 0.24)
+
+
+def build_stone_pine() -> Mesh:
+    """Итальянская пиния, основание в начале координат."""
+    m = Mesh("stone_pine")
+    m.add_cylinder(0.0, 0.0, 0.0, 0.045, 0.36, BARK, 6)
+    m.add_cylinder(0.0, 0.28, 0.0, 0.30, 0.10, CANOPY_DARK, 8)
+    m.add_cylinder(0.0, 0.36, 0.0, 0.36, 0.09, CANOPY, 8)
+    m.add_cone(0.0, 0.43, 0.0, 0.24, 0.16, CANOPY_LIGHT, 8)
+    return m
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for name, builder in (
@@ -279,6 +322,11 @@ def main() -> None:
         path = OUT_DIR / ("%s.glb" % name)
         write_glb(path, builder())
         print("wrote", path, "(%d bytes)" % path.stat().st_size)
+    trees = OUT_DIR.parent / "trees"
+    trees.mkdir(parents=True, exist_ok=True)
+    pine = trees / "stone_pine.glb"
+    write_glb(pine, build_stone_pine())
+    print("wrote", pine, "(%d bytes)" % pine.stat().st_size)
 
 
 if __name__ == "__main__":

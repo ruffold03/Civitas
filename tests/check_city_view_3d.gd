@@ -54,6 +54,15 @@ func _initialize() -> void:
 	var terrain: Node3D = city.get_node_or_null("World/Terrain")
 	if terrain == null or terrain.get_child_count() < 18 * 18:
 		failures.append("рельеф неполный")
+	if not FileAccess.file_exists("res://art/italy/classical/trees/stone_pine.glb"):
+		failures.append("нет модели леса")
+	var trees: Node3D = city.get_node_or_null("World/Trees")
+	if trees == null or trees.get_child_count() == 0:
+		failures.append("нет деревьев на лесу")
+	else:
+		var grove := trees.get_child(0) as MultiMeshInstance3D
+		if grove == null or grove.multimesh == null or grove.multimesh.instance_count < 10:
+			failures.append("роща слишком редкая")
 	_finish(failures)
 
 
